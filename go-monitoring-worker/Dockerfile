@@ -37,6 +37,6 @@ WORKDIR /root/
 COPY --from=builder /ips-worker .
 
 # Worker Internal Health/Metrics Port
-EXPOSE 8084
+EXPOSE 8086
 
 CMD ["./ips-worker"]
