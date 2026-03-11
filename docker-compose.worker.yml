@@ -33,6 +33,7 @@ services:
     build:
       context: ./go-monitoring-worker
       dockerfile: Dockerfile
+      network: host
     container_name: ips_worker_edge_01
     restart: unless-stopped
     depends_on:
