@@ -1,27 +1,30 @@
 package api
 
 import (
-	"encoding/json"
-	"fmt"
 	"net/http"
 
-	"github.com/monitoring-system/go-worker/internal/models"
 	"github.com/monitoring-system/go-worker/internal/scheduler"
 )
 
 // Server expone un puerto local (ej: :8081) que el Servidor Principal (FastAPI) consume
 type Server struct {
-	sched scheduler.Manager
+	sched          scheduler.Manager
+	reloadCh       chan struct{}
+	internalSecret string
 }
 
-func NewServer(m scheduler.Manager) *Server {
-	return &Server{sched: m}
+func NewServer(m scheduler.Manager, reloadCh chan struct{}, internalSecret string) *Server {
+	return &Server{
+		sched:          m,
+		reloadCh:       reloadCh,
+		internalSecret: internalSecret,
+	}
 }
 
 // Router returns the configured ServeMux
 func (s *Server) Router() *http.ServeMux {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/targets/sync", s.HandleSyncTargets())
+	mux.HandleFunc("/internal/reload", s.HandleReload())
 	mux.HandleFunc("/health", s.HandleHealthCheck())
 
 	// Inicializamos e inyectamos el Audito de Performance Pprof (Aislado)
@@ -33,25 +36,31 @@ func (s *Server) Router() *http.ServeMux {
 	return mux
 }
 
-// POST /api/targets/sync -> FastAPI avisa que las configuraciones de BD cambiaron
-func (s *Server) HandleSyncTargets() http.HandlerFunc {
+// POST /internal/reload -> FastAPI notifica que hubo un cambio en la configuración de targets.
+// El handler responde 202 inmediatamente y delega el fetch al PULL loop via canal (fire-and-forget).
+// Si ya hay una señal pendiente en el canal (buffer=1), la nueva se descarta silenciosamente:
+// el reload en vuelo ya va a capturar el estado más reciente.
+func (s *Server) HandleReload() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
-		var targets []models.TargetConfig
-		if err := json.NewDecoder(r.Body).Decode(&targets); err != nil {
-			http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
+		if r.Header.Get("X-Internal-Secret") != s.internalSecret {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 
-		s.sched.SyncConfiguration(targets)
+		// Non-blocking send: descarta si ya hay un reload encolado
+		select {
+		case s.reloadCh <- struct{}{}:
+		default:
+		}
 
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status": "synchronized", "count": ` + fmt.Sprint(len(targets)) + `}`))
+		w.WriteHeader(http.StatusAccepted)
+		w.Write([]byte(`{"status": "reload_queued"}`))
 	}
 }
 

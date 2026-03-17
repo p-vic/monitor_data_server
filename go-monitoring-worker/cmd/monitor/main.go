@@ -82,34 +82,42 @@ func main() {
 	go pingService.StartWorkers(ctx)
 	go manager.StartTicks(ctx, pingService)
 
-	// Arquitectura PULL: Ticker Periódico pidiendo trabajos al Control Plane
+	// Canal de señalización push: buffer=1 para descartar señales duplicadas
+	// mientras un reload ya está en vuelo.
+	reloadCh := make(chan struct{}, 1)
+
+	// Arquitectura PULL con Push-Signal: el ticker de 5min es el fallback de seguridad.
+	// Los cambios en tiempo real se propagan vía señal push desde FastAPI → /internal/reload.
 	go func() {
-		ticker := time.NewTicker(30 * time.Second)
+		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()
 
-		// Initial immediate pull
-		if targets, err := m2mClient.FetchTargets(ctx); err == nil {
-			manager.SyncConfiguration(targets)
-		} else {
-			log.Printf("Boot M2M Pull Failed: %v", err)
+		doSync := func(reason string) {
+			if targets, err := m2mClient.FetchTargets(ctx); err == nil {
+				manager.SyncConfiguration(targets)
+				log.Printf("Sync OK [%s]: %d targets loaded", reason, len(targets))
+			} else {
+				log.Printf("Sync FAILED [%s]: %v", reason, err)
+			}
 		}
+
+		// Pull inicial en el arranque
+		doSync("boot")
 
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				if targets, err := m2mClient.FetchTargets(ctx); err == nil {
-					manager.SyncConfiguration(targets)
-				} else {
-					log.Printf("Periodic M2M Pull Failed: %v", err)
-				}
+				doSync("periodic-fallback")
+			case <-reloadCh:
+				doSync("push-signal")
 			}
 		}
 	}()
 
-	// 7. Levantar API Interna (Pprof)
-	apiServer := api.NewServer(manager)
+	// 7. Levantar API Interna (Pprof + Reload endpoint)
+	apiServer := api.NewServer(manager, reloadCh, cfg.HMACSecret)
 	server := &http.Server{
 		Addr:    ":8081",
 		Handler: apiServer.Router(),
