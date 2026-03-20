@@ -1,7 +1,9 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
+	"syscall"
 
 	"github.com/monitoring-system/go-worker/internal/scheduler"
 )
@@ -25,6 +27,7 @@ func NewServer(m scheduler.Manager, reloadCh chan struct{}, internalSecret strin
 func (s *Server) Router() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/internal/reload", s.HandleReload())
+	mux.HandleFunc("/internal/storage", s.HandleStorageInfo())
 	mux.HandleFunc("/health", s.HandleHealthCheck())
 
 	// Inicializamos e inyectamos el Audito de Performance Pprof (Aislado)
@@ -69,5 +72,38 @@ func (s *Server) HandleHealthCheck() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
+	}
+}
+
+// GET /internal/storage -> Disk usage stats of this worker node's filesystem
+func (s *Server) HandleStorageInfo() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if r.Header.Get("X-Internal-Secret") != s.internalSecret {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		var stat syscall.Statfs_t
+		if err := syscall.Statfs("/", &stat); err != nil {
+			http.Error(w, `{"error":"failed to get disk stats"}`, http.StatusInternalServerError)
+			return
+		}
+
+		blockSize := uint64(stat.Bsize)
+		total := stat.Blocks * blockSize
+		free := stat.Bfree * blockSize
+		available := stat.Bavail * blockSize
+		used := total - free
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]uint64{
+			"disk_total_bytes":     total,
+			"disk_used_bytes":      used,
+			"disk_available_bytes": available,
+		})
 	}
 }
