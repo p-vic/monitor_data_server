@@ -40,7 +40,7 @@ services:
       influxdb:
         condition: service_healthy
     ports:
-      - "127.0.0.1:8081:8081"
+      - "127.0.0.1:8082:8081"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
