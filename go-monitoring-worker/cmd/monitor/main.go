@@ -117,7 +117,7 @@ func main() {
 	}()
 
 	// 7. Levantar API Interna (Pprof + Reload endpoint)
-	apiServer := api.NewServer(manager, reloadCh, cfg.HMACSecret)
+	apiServer := api.NewServer(manager, reloadCh, cfg.HMACSecret, cfg.InfluxURL, cfg.InfluxToken)
 	server := &http.Server{
 		Addr:    ":8081",
 		Handler: apiServer.Router(),

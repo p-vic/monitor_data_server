@@ -1,9 +1,13 @@
 package api
 
 import (
+	"bufio"
 	"encoding/json"
 	"net/http"
+	"strconv"
+	"strings"
 	"syscall"
+	"time"
 
 	"github.com/monitoring-system/go-worker/internal/scheduler"
 )
@@ -13,13 +17,17 @@ type Server struct {
 	sched          scheduler.Manager
 	reloadCh       chan struct{}
 	internalSecret string
+	influxURL      string
+	influxToken    string
 }
 
-func NewServer(m scheduler.Manager, reloadCh chan struct{}, internalSecret string) *Server {
+func NewServer(m scheduler.Manager, reloadCh chan struct{}, internalSecret, influxURL, influxToken string) *Server {
 	return &Server{
 		sched:          m,
 		reloadCh:       reloadCh,
 		internalSecret: internalSecret,
+		influxURL:      influxURL,
+		influxToken:    influxToken,
 	}
 }
 
@@ -75,7 +83,44 @@ func (s *Server) HandleHealthCheck() http.HandlerFunc {
 	}
 }
 
-// GET /internal/storage -> Disk usage stats of this worker node's filesystem
+// fetchInfluxDBBytes queries the InfluxDB Prometheus /metrics endpoint and sums
+// the storage_shard_disk_size gauge to return total bytes used by InfluxDB.
+func (s *Server) fetchInfluxDBBytes() (uint64, error) {
+	metricsURL := strings.TrimRight(s.influxURL, "/") + "/metrics"
+	req, err := http.NewRequest(http.MethodGet, metricsURL, nil)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("Authorization", "Token "+s.influxToken)
+
+	client := &http.Client{Timeout: 4 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	var total uint64
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "#") || line == "" {
+			continue
+		}
+		if strings.HasPrefix(line, "storage_shard_disk_size{") {
+			parts := strings.Fields(line)
+			if len(parts) >= 2 {
+				val, err := strconv.ParseFloat(parts[len(parts)-1], 64)
+				if err == nil {
+					total += uint64(val)
+				}
+			}
+		}
+	}
+	return total, scanner.Err()
+}
+
+// GET /internal/storage -> Disk usage stats of this worker node's filesystem + InfluxDB
 func (s *Server) HandleStorageInfo() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -99,11 +144,14 @@ func (s *Server) HandleStorageInfo() http.HandlerFunc {
 		available := stat.Bavail * blockSize
 		used := total - free
 
+		influxBytes, _ := s.fetchInfluxDBBytes() // best-effort; 0 if unreachable
+
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]uint64{
 			"disk_total_bytes":     total,
 			"disk_used_bytes":      used,
 			"disk_available_bytes": available,
+			"influxdb_used_bytes":  influxBytes,
 		})
 	}
 }
