@@ -18,8 +18,8 @@ Desktop.ini
 .fleet/
 # Entornos Virtuales y Variables de Entorno
 .env
-.env.w2
-.env.w3
+.env-w2
+.env-w3
 .env.local
 .env.development.local
 .env.test.local
