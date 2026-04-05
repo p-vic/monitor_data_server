@@ -1,0 +1,73 @@
+name: ips-worker-3
+
+services:
+  # ==========================================
+  # Database Layer (Time-Series) for W3
+  # ==========================================
+  influxdb:
+    image: influxdb:2.7-alpine
+    container_name: ips_influxdb_w3
+    restart: unless-stopped
+    ports:
+      # Expose InfluxDB via port 8087 on the host
+      - "8087:8086"
+    volumes:
+      - influxdb3_data:/var/lib/influxdb3
+      - influxdb3_config:/etc/influxdb3
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUXDB_INIT_USERNAME}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUXDB_INIT_PASSWORD}
+      DOCKER_INFLUXDB_INIT_ORG: ${INFLUXDB_INIT_ORG}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUXDB_INIT_BUCKET}
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUXDB_INIT_ADMIN_TOKEN}
+    healthcheck:
+      test: [ "CMD", "curl", "-sI", "http://localhost:8086/ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==========================================
+  # Data Plane Layer (Golang Worker 3)
+  # ==========================================
+  golang-worker-3:
+    build:
+      context: ./go-monitoring-worker
+      dockerfile: Dockerfile
+      network: host
+    container_name: ips_worker_edge_03
+    restart: unless-stopped
+    depends_on:
+      influxdb:
+        condition: service_healthy
+    ports:
+      # Expose worker API via port 8083 on the host
+      - "0.0.0.0:8083:8081"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      WORKER_ID: "${WORKER_ID}"
+      # External Control Plane URL (Update this on PRODUCTION deploy!)
+      CONTROL_PLANE_URL: "${EXTERNAL_CONTROL_PLANE_URL}"
+      HMAC_SECRET: "${HMAC_SECRET}"
+      INFLUX_URL: "http://influxdb:8086"
+      INFLUX_TOKEN: "${INFLUXDB_INIT_ADMIN_TOKEN}"
+      INFLUX_ORG: "${INFLUXDB_INIT_ORG}"
+      INFLUX_BUCKET: "${INFLUXDB_INIT_BUCKET}"
+    env_file:
+      - .env-w3
+    sysctls:
+      - net.ipv4.ping_group_range=0 2147483647
+
+# Isolated volumes precisely for W3
+volumes:
+  influxdb3_data:
+    driver: local
+  influxdb3_config:
+    driver: local
+
+networks:
+  default:
+    driver: bridge
+    driver_opts:
+      com.docker.network.driver.mtu: "1360"
