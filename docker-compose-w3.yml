@@ -54,6 +54,7 @@ services:
       INFLUX_TOKEN: "${INFLUXDB_INIT_ADMIN_TOKEN}"
       INFLUX_ORG: "${INFLUXDB_INIT_ORG}"
       INFLUX_BUCKET: "${INFLUXDB_INIT_BUCKET}"
+      TZ: "America/Phoenix"
     #env_file:
     #  - .env-w3
     sysctls:

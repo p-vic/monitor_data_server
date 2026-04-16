@@ -52,6 +52,7 @@ services:
       INFLUX_TOKEN: "${INFLUXDB_INIT_ADMIN_TOKEN:-master-secret-token-12345}"
       INFLUX_ORG: "${INFLUXDB_INIT_ORG:-monitoring}"
       INFLUX_BUCKET: "${INFLUXDB_INIT_BUCKET:-monitorings}"
+      TZ: "America/Phoenix"
     env_file:
       - .env
     sysctls:
