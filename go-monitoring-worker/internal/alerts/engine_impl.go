@@ -134,7 +134,7 @@ func (e *fsmEngine) handleCritical(state *targetState, target models.TargetConfi
 		// This generates a duplicate visual log but signals the threshold breach
 		e.fireEvent(target, result, "CRITICAL", "Threshold breached")
 
-		if e.notifier != nil {
+		if e.notifier != nil && target.AlertEmail != "" {
 			var latencyStr string
 			if result.IsDown {
 				latencyStr = "DOWN (Timeout/Unreachable)"
@@ -184,7 +184,7 @@ func (e *fsmEngine) handleSuccessOrWarning(state *targetState, target models.Tar
 
 				e.fireEvent(target, result, "RECOVERY", "Service is back online")
 
-				if e.notifier != nil {
+				if e.notifier != nil && target.AlertEmail != "" {
 					body := fmt.Sprintf(`Service %s (%s) has successfully recovered.
 
 === Ping Status ===
