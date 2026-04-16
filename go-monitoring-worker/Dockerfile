@@ -3,8 +3,8 @@
 # ==========================================
 FROM golang:1.24.0-alpine AS builder
 
-# Git required for fetching go dependencies
-RUN apk update && apk add --no-cache git tzdata
+# git not needed: go mod download uses GOPROXY (HTTPS). tzdata required for timezone handling.
+RUN apk add --no-cache tzdata
 
 WORKDIR /app
 
@@ -20,16 +20,14 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /ips-worker ./cmd/monitor
 
 # ==========================================
-# Production Stage - Scratch Minimal
+# Production Stage - Alpine Minimal
 # ==========================================
-# We use Alpine instead of Scratch strictly to have CA-Certificates and tzdata.
-# The binary needs them to execute SSL requests to FastAPI and format Timezones.
 FROM alpine:3.19
 
-RUN apk --no-cache add ca-certificates tzdata \
-    # ICMP ping operations require the SYS_NET_ADMIN capability 
-    # Or allowing unprivileged pings via sysctl equivalent (done in Go Code)
-    && rm -rf /var/cache/apk/*
+# Copy ca-certificates and tzdata directly from builder — avoids a second apk call
+# which is slow/unreliable depending on the server's CDN connectivity.
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
 
 WORKDIR /root/
 
