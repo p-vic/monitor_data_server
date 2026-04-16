@@ -86,7 +86,7 @@ func (b *BatchNotifier) flush() {
 		}
 
 		isRecovery := false
-		if bytes.Contains([]byte(subject), []byte("RESOLVED")) {
+		if bytes.Contains([]byte(subject), []byte("RECOVERY")) {
 			isRecovery = true
 		}
 
