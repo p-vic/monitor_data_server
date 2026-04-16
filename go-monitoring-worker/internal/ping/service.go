@@ -10,4 +10,5 @@ import (
 type Service interface {
 	StartWorkers(ctx context.Context)
 	EnqueueJob(target models.TargetConfig)
+	ResetTarget(targetID string)
 }

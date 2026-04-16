@@ -34,6 +34,12 @@ func NewWorkerPool(maxWorkers int, exec Executor, engine alerts.Engine, writer i
 	}
 }
 
+func (p *workerPool) ResetTarget(targetID string) {
+	if p.engine != nil {
+		p.engine.ResetTarget(targetID)
+	}
+}
+
 func (p *workerPool) EnqueueJob(target models.TargetConfig) {
 	select {
 	case p.jobQueue <- target:

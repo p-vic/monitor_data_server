@@ -66,6 +66,8 @@ func (m *dynamicManager) SyncConfiguration(targets []models.TargetConfig) {
 				delete(m.cancelFuncs, id)
 			}
 			delete(m.activeTargets, id)
+			// Reset FSM state so reactivated targets start fresh (no stale isAlarmed)
+			m.pool.ResetTarget(id)
 		}
 	}
 

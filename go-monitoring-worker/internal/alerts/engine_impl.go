@@ -211,6 +211,12 @@ Visual dashboards will now drop the DOWN markers.`,
 	}
 }
 
+func (e *fsmEngine) ResetTarget(targetID string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	delete(e.states, targetID)
+}
+
 func (e *fsmEngine) fireEvent(target models.TargetConfig, p models.PingResult, evType string, msg string) {
 	if e.influxWriter != nil {
 		alert := influx.AlertEvent{
