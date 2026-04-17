@@ -101,8 +101,8 @@ func (e *NetworkExecutor) executeICMP(ctx context.Context, target string, timeou
 		}
 	}
 
-	// Security: Run unprivileged to avoid requiring root (SYS_NET_ADMIN).
-	pinger.SetPrivileged(false)
+	// Raw ICMP socket — requires NET_RAW capability (set in docker-compose).
+	pinger.SetPrivileged(true)
 	pinger.Count = 3
 	pinger.Interval = 200 * time.Millisecond
 	pinger.Timeout = timeout

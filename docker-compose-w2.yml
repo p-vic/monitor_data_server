@@ -57,8 +57,8 @@ services:
       TZ: "America/Phoenix"
     #env_file:
     #  - .env
-    sysctls:
-      - net.ipv4.ping_group_range=0 2147483647
+    cap_add:
+      - NET_RAW
 
 volumes:
   influxdb_data:
