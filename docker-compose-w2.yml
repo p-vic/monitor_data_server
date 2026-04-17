@@ -36,19 +36,16 @@ services:
       network: host
     container_name: ips_worker_edge_02
     restart: unless-stopped
+    network_mode: host
     depends_on:
       influxdb:
         condition: service_healthy
-    ports:
-      - "0.0.0.0:8082:8081"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     environment:
       WORKER_ID: "${WORKER_ID}"
       # External Control Plane URL (Update this on PRODUCTION deploy!)
       CONTROL_PLANE_URL: "${EXTERNAL_CONTROL_PLANE_URL}"
       HMAC_SECRET: "${HMAC_SECRET}"
-      INFLUX_URL: "http://influxdb:8086"
+      INFLUX_URL: "http://localhost:8086"
       INFLUX_TOKEN: "${INFLUXDB_INIT_ADMIN_TOKEN}"
       INFLUX_ORG: "${INFLUXDB_INIT_ORG}"
       INFLUX_BUCKET: "${INFLUXDB_INIT_BUCKET}"
