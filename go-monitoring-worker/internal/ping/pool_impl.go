@@ -82,7 +82,7 @@ func (p *workerPool) worker(ctx context.Context) {
 
 			pingRes := models.PingResult{
 				TargetID:  target.ID,
-				LatencyMs: float64(res.Latency.Milliseconds()),
+				LatencyMs: float64(res.Latency.Nanoseconds()) / 1e6,
 				IsDown:    !res.IsUp,
 				Timestamp: time.Now(),
 			}
