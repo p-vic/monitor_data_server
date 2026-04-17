@@ -101,10 +101,11 @@ func (e *NetworkExecutor) executeICMP(ctx context.Context, target string, timeou
 		}
 	}
 
-	// Raw ICMP socket — requires NET_RAW capability (set in docker-compose).
-	pinger.SetPrivileged(true)
-	pinger.Count = 3
-	pinger.Interval = 200 * time.Millisecond
+	// Unprivileged ICMP via UDP — each pinger gets a unique ICMP ID from the kernel,
+	// avoiding conflicts when multiple targets are pinged concurrently.
+	// Works correctly with network_mode: host (no NAT).
+	pinger.SetPrivileged(false)
+	pinger.Count = 1
 	pinger.Timeout = timeout
 
 	done := make(chan error, 1)

@@ -57,8 +57,6 @@ services:
       TZ: "America/Phoenix"
     #env_file:
     #  - .env
-    cap_add:
-      - NET_RAW
 
 volumes:
   influxdb_data:
