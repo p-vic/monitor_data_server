@@ -37,6 +37,8 @@ services:
     container_name: ips_worker_edge_02
     restart: unless-stopped
     network_mode: host
+    cap_add:
+      - NET_RAW
     depends_on:
       influxdb:
         condition: service_healthy

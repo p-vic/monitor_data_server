@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"net"
 	"strings"
 	"time"
 
-	"github.com/go-ping/ping"
+	"golang.org/x/net/icmp"
+	"golang.org/x/net/ipv4"
 )
 
 // Protocol enum determines the type of network health check.
@@ -47,7 +49,6 @@ func (e *NetworkExecutor) Execute(ctx context.Context, target string, protocol P
 		timeout = 5 * time.Second
 	}
 
-	// 1. Context Cancellation check: Ensure operation ties to the parent context.
 	opCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
@@ -70,7 +71,6 @@ func (e *NetworkExecutor) executeTCP(ctx context.Context, target string) Result 
 	var dialer net.Dialer
 	start := time.Now()
 
-	// 2. Explicit Network Error Handling using DialContext
 	conn, err := dialer.DialContext(ctx, "tcp", target)
 	if err != nil {
 		return Result{
@@ -91,38 +91,81 @@ func (e *NetworkExecutor) executeTCP(ctx context.Context, target string) Result 
 }
 
 func (e *NetworkExecutor) executeICMP(ctx context.Context, target string, timeout time.Duration) Result {
-	pinger, err := ping.NewPinger(target)
+	// Resolve hostname to IPv4 address.
+	host := target
+	if h, _, err := net.SplitHostPort(target); err == nil {
+		host = h
+	}
+	dst, err := net.ResolveIPAddr("ip4", host)
 	if err != nil {
 		return Result{
 			Target:   target,
 			Protocol: ProtocolICMP,
 			IsUp:     false,
-			ErrorMsg: fmt.Sprintf("failed to initialize pinger: %v", err),
+			ErrorMsg: "dns resolution failed",
 		}
 	}
 
-	// Unprivileged ICMP via UDP — each pinger gets a unique ICMP ID from the kernel,
-	// avoiding conflicts when multiple targets are pinged concurrently.
-	// Works correctly with network_mode: host (no NAT).
-	pinger.SetPrivileged(false)
-	pinger.Count = 1
-	pinger.Timeout = timeout
-
-	done := make(chan error, 1)
-	go func() {
-		done <- pinger.Run()
-	}()
-
-	select {
-	case <-ctx.Done():
-		pinger.Stop()
+	// Raw ICMP socket — each call gets its own socket and a random ID,
+	// so concurrent goroutines never mix up each other's echo replies.
+	// Requires CAP_NET_RAW (set in docker-compose via cap_add: NET_RAW).
+	conn, err := icmp.ListenPacket("ip4:icmp", "0.0.0.0")
+	if err != nil {
 		return Result{
 			Target:   target,
 			Protocol: ProtocolICMP,
 			IsUp:     false,
-			ErrorMsg: parseNetworkError(ctx.Err()),
+			ErrorMsg: fmt.Sprintf("icmp socket: %v", err),
 		}
-	case err := <-done:
+	}
+	defer conn.Close()
+
+	id := rand.Intn(0xfffe) + 1 // 1–65534, never 0
+	seq := 1
+
+	msg := icmp.Message{
+		Type: ipv4.ICMPTypeEcho,
+		Code: 0,
+		Body: &icmp.Echo{ID: id, Seq: seq, Data: []byte("ips")},
+	}
+	wb, err := msg.Marshal(nil)
+	if err != nil {
+		return Result{
+			Target:   target,
+			Protocol: ProtocolICMP,
+			IsUp:     false,
+			ErrorMsg: fmt.Sprintf("icmp marshal: %v", err),
+		}
+	}
+
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		deadline = time.Now().Add(timeout)
+	}
+	_ = conn.SetDeadline(deadline)
+
+	start := time.Now()
+	if _, err := conn.WriteTo(wb, dst); err != nil {
+		return Result{
+			Target:   target,
+			Protocol: ProtocolICMP,
+			IsUp:     false,
+			ErrorMsg: parseNetworkError(err),
+		}
+	}
+
+	rb := make([]byte, 1500)
+	for {
+		if ctx.Err() != nil {
+			return Result{
+				Target:   target,
+				Protocol: ProtocolICMP,
+				IsUp:     false,
+				ErrorMsg: parseNetworkError(ctx.Err()),
+			}
+		}
+
+		n, _, err := conn.ReadFrom(rb)
 		if err != nil {
 			return Result{
 				Target:   target,
@@ -132,21 +175,21 @@ func (e *NetworkExecutor) executeICMP(ctx context.Context, target string, timeou
 			}
 		}
 
-		stats := pinger.Statistics()
-		if stats.PacketsRecv == 0 {
+		rm, err := icmp.ParseMessage(1, rb[:n])
+		if err != nil {
+			continue
+		}
+		if rm.Type != ipv4.ICMPTypeEchoReply {
+			continue
+		}
+		echo, ok := rm.Body.(*icmp.Echo)
+		if ok && echo.ID == id && echo.Seq == seq {
 			return Result{
 				Target:   target,
 				Protocol: ProtocolICMP,
-				IsUp:     false,
-				ErrorMsg: "packet loss 100%",
+				Latency:  time.Since(start),
+				IsUp:     true,
 			}
-		}
-
-		return Result{
-			Target:   target,
-			Protocol: ProtocolICMP,
-			Latency:  stats.AvgRtt,
-			IsUp:     true,
 		}
 	}
 }
@@ -162,7 +205,6 @@ func parseNetworkError(err error) string {
 		return "context canceled"
 	}
 
-	// Provide cleaner messages for common net errors
 	errStr := err.Error()
 	if strings.Contains(errStr, "connection refused") {
 		return "connection refused"
