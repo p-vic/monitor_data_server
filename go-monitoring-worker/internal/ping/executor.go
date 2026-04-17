@@ -103,7 +103,8 @@ func (e *NetworkExecutor) executeICMP(ctx context.Context, target string, timeou
 
 	// Security: Run unprivileged to avoid requiring root (SYS_NET_ADMIN).
 	pinger.SetPrivileged(false)
-	pinger.Count = 1
+	pinger.Count = 3
+	pinger.Interval = 200 * time.Millisecond
 	pinger.Timeout = timeout
 
 	done := make(chan error, 1)
