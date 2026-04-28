@@ -36,6 +36,8 @@ services:
       network: host
     container_name: ips_worker_edge_01
     restart: unless-stopped
+    cap_add:
+      - NET_RAW
     depends_on:
       influxdb:
         condition: service_healthy
@@ -54,9 +56,7 @@ services:
       INFLUX_BUCKET: "${INFLUXDB_INIT_BUCKET:-monitorings}"
       TZ: "America/Phoenix"
     env_file:
-      - .env
-    sysctls:
-      - net.ipv4.ping_group_range=0 2147483647
+      - .env.w1
 
 volumes:
   influxdb_data:
