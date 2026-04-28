@@ -58,7 +58,7 @@ services:
       INFLUX_BUCKET: "${INFLUXDB_INIT_BUCKET}"
       TZ: "America/Phoenix"
     env_file:
-      - .env.w3
+      - .env-w3
 
 # Isolated volumes precisely for W3
 volumes:

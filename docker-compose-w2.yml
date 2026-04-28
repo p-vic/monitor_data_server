@@ -58,7 +58,7 @@ services:
       SMTP_FROM: "${SMTP_FROM}"
       TZ: "America/Phoenix"
     env_file:
-      - .env.w2
+      - .env-w2
 
 volumes:
   influxdb_data:

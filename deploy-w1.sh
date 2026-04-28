@@ -6,7 +6,7 @@
 set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMPOSE_FILE="$SCRIPT_DIR/docker-compose-w1.yml"
-ENV_FILE="$SCRIPT_DIR/.env.w1"
+ENV_FILE="$SCRIPT_DIR/.env-w1"
 
 if [ ! -f "$ENV_FILE" ]; then
   echo "ERROR: No se encontró $ENV_FILE"

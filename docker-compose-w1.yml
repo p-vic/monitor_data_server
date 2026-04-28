@@ -56,7 +56,7 @@ services:
       INFLUX_BUCKET: "${INFLUXDB_INIT_BUCKET:-monitorings}"
       TZ: "America/Phoenix"
     env_file:
-      - .env.w1
+      - .env-w1
 
 volumes:
   influxdb_data:
