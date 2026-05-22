@@ -22,7 +22,7 @@ type TargetConfig struct {
 	Timeout        time.Duration
 	WarningLatency float64
 	MaxLatency     float64
-	AlertEmail     string
+	AlertEmails    []string
 	AlertType      string // "every_n_alerts", etc.
 	AlertConfig    string // JSON `{"t": 60, "n": 5, "c": true, "r": 3}`
 	IsActive       bool

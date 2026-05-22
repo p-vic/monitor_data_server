@@ -134,7 +134,7 @@ func (e *fsmEngine) handleCritical(state *targetState, target models.TargetConfi
 		// This generates a duplicate visual log but signals the threshold breach
 		e.fireEvent(target, result, "CRITICAL", "Threshold breached")
 
-		if e.notifier != nil && target.AlertEmail != "" {
+		if e.notifier != nil && len(target.AlertEmails) > 0 {
 			var latencyStr string
 			if result.IsDown {
 				latencyStr = "DOWN (Timeout/Unreachable)"
@@ -159,7 +159,9 @@ Please check the Telemetry Dashboard for visual correlation.`,
 				target.Name, target.IPAddress, latencyStr, target.MaxLatency, target.WarningLatency,
 				cfg.T, cfg.N, cfg.C, cfg.R)
 
-			_ = e.notifier.SendEmail(target.AlertEmail, "CRITICAL ALERT: "+target.Name, body)
+			for _, email := range target.AlertEmails {
+				_ = e.notifier.SendEmail(email, "CRITICAL ALERT: "+target.Name, body)
+			}
 		}
 	}
 }
@@ -184,7 +186,7 @@ func (e *fsmEngine) handleSuccessOrWarning(state *targetState, target models.Tar
 
 				e.fireEvent(target, result, "RECOVERY", "Service is back online")
 
-				if e.notifier != nil && target.AlertEmail != "" {
+				if e.notifier != nil && len(target.AlertEmails) > 0 {
 					body := fmt.Sprintf(`Service %s (%s) has successfully recovered.
 
 === Ping Status ===
@@ -198,7 +200,9 @@ func (e *fsmEngine) handleSuccessOrWarning(state *targetState, target models.Tar
 Visual dashboards will now drop the DOWN markers.`,
 						target.Name, target.IPAddress, result.LatencyMs, target.MaxLatency, cfg.R)
 
-					_ = e.notifier.SendEmail(target.AlertEmail, "RECOVERY: "+target.Name, body)
+					for _, email := range target.AlertEmails {
+						_ = e.notifier.SendEmail(email, "RECOVERY: "+target.Name, body)
+					}
 				}
 			} else {
 				// Ongoing recovery attempt

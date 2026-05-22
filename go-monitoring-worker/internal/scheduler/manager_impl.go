@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"math/rand"
+	"reflect"
 	"sync"
 	"time"
 
@@ -59,7 +60,7 @@ func (m *dynamicManager) SyncConfiguration(targets []models.TargetConfig) {
 	// 1. Detect targets to Remove or Update
 	for id, activeConfig := range m.activeTargets {
 		incomingConfig, exists := incomingMap[id]
-		if !exists || incomingConfig != activeConfig {
+		if !exists || !reflect.DeepEqual(incomingConfig, activeConfig) {
 			// Stop current tick loop
 			if cancel, hasCancel := m.cancelFuncs[id]; hasCancel {
 				cancel()

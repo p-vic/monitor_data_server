@@ -36,7 +36,7 @@ type M2MTaskConfig struct {
 	Timeout        int         `json:"timeout"`        // Seconds
 	WarningLatency float64     `json:"warning_latency"`
 	MaxLatency     float64     `json:"max_latency"`
-	AlertEmail     string      `json:"alert_email"`
+	AlertEmails    []string    `json:"alert_emails"`
 	AlertConfig    interface{} `json:"alert_config"`
 	IsActive       bool        `json:"is_active"`
 }
@@ -132,7 +132,7 @@ func (c *M2MClient) FetchTargets(ctx context.Context) ([]models.TargetConfig, er
 			Timeout:        time.Duration(t.Timeout) * time.Second,
 			WarningLatency: t.WarningLatency,
 			MaxLatency:     t.MaxLatency,
-			AlertEmail:     t.AlertEmail,
+			AlertEmails:    t.AlertEmails,
 			AlertConfig:    alertConfigJSON,
 			IsActive:       t.IsActive,
 		})
