@@ -134,7 +134,7 @@ func (e *fsmEngine) handleCritical(state *targetState, target models.TargetConfi
 		// This generates a duplicate visual log but signals the threshold breach
 		e.fireEvent(target, result, "CRITICAL", "Threshold breached")
 
-		if e.notifier != nil && len(target.AlertEmails) > 0 {
+		if e.notifier != nil {
 			var latencyStr string
 			if result.IsDown {
 				latencyStr = "DOWN (Timeout/Unreachable)"
@@ -142,7 +142,13 @@ func (e *fsmEngine) handleCritical(state *targetState, target models.TargetConfi
 				latencyStr = fmt.Sprintf("%.2f ms", result.LatencyMs)
 			}
 
-			body := fmt.Sprintf(`Critical Alert triggered for %s (%s).
+			channel := target.NotificationChannel
+			if channel == "" {
+				channel = "email"
+			}
+
+			if (channel == "email" || channel == "both") && len(target.AlertEmails) > 0 {
+				body := fmt.Sprintf(`Critical Alert triggered for %s (%s).
 
 === Last Ping Status ===
 - Status: %s
@@ -156,11 +162,18 @@ func (e *fsmEngine) handleCritical(state *targetState, target models.TargetConfi
 - Recovery Pings Needed (r): %d
 
 Please check the Telemetry Dashboard for visual correlation.`,
-				target.Name, target.IPAddress, latencyStr, target.MaxLatency, target.WarningLatency,
-				cfg.T, cfg.N, cfg.C, cfg.R)
+					target.Name, target.IPAddress, latencyStr, target.MaxLatency, target.WarningLatency,
+					cfg.T, cfg.N, cfg.C, cfg.R)
 
-			for _, email := range target.AlertEmails {
-				_ = e.notifier.SendEmail(email, "CRITICAL ALERT: "+target.Name, body)
+				for _, email := range target.AlertEmails {
+					_ = e.notifier.SendEmail(email, "CRITICAL ALERT: "+target.Name, body)
+				}
+			}
+
+			if (channel == "telegram" || channel == "both") && target.TelegramChatID != "" {
+				tgMsg := fmt.Sprintf("🚨 CRITICAL ALERT: %s\nHost: %s\nStatus: %s\nMax Latency: %.0f ms\nWindow: %ds / %d faults",
+					target.Name, target.IPAddress, latencyStr, target.MaxLatency, cfg.T, cfg.N)
+				_ = e.notifier.SendTelegram(target.TelegramChatID, tgMsg)
 			}
 		}
 	}
@@ -186,8 +199,14 @@ func (e *fsmEngine) handleSuccessOrWarning(state *targetState, target models.Tar
 
 				e.fireEvent(target, result, "RECOVERY", "Service is back online")
 
-				if e.notifier != nil && len(target.AlertEmails) > 0 {
-					body := fmt.Sprintf(`Service %s (%s) has successfully recovered.
+				if e.notifier != nil {
+					channel := target.NotificationChannel
+					if channel == "" {
+						channel = "email"
+					}
+
+					if (channel == "email" || channel == "both") && len(target.AlertEmails) > 0 {
+						body := fmt.Sprintf(`Service %s (%s) has successfully recovered.
 
 === Ping Status ===
 - Current Latency: %.2f ms
@@ -198,10 +217,17 @@ func (e *fsmEngine) handleSuccessOrWarning(state *targetState, target models.Tar
 - FSM State restored to: StatusGreen (Normal)
 
 Visual dashboards will now drop the DOWN markers.`,
-						target.Name, target.IPAddress, result.LatencyMs, target.MaxLatency, cfg.R)
+							target.Name, target.IPAddress, result.LatencyMs, target.MaxLatency, cfg.R)
 
-					for _, email := range target.AlertEmails {
-						_ = e.notifier.SendEmail(email, "RECOVERY: "+target.Name, body)
+						for _, email := range target.AlertEmails {
+							_ = e.notifier.SendEmail(email, "RECOVERY: "+target.Name, body)
+						}
+					}
+
+					if (channel == "telegram" || channel == "both") && target.TelegramChatID != "" {
+						tgMsg := fmt.Sprintf("✅ RECOVERY: %s\nHost: %s\nLatency: %.2f ms\nService is back online.",
+							target.Name, target.IPAddress, result.LatencyMs)
+						_ = e.notifier.SendTelegram(target.TelegramChatID, tgMsg)
 					}
 				}
 			} else {

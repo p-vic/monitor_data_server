@@ -57,7 +57,7 @@ func TestM2MClient_FetchJobs_Success(t *testing.T) {
 			"worker_id": "worker-123",
 			"tasks_count": 1,
 			"tasks": [
-				{"ID": "job-1", "IPAddress": "1.1.1.1", "Protocol": "icmp", "Timeout": 5000}
+				{"id": "job-1", "ip_address": "1.1.1.1", "is_active": true, "check_interval": 30, "timeout": 5}
 			]
 		}`
 		w.Write([]byte(response))

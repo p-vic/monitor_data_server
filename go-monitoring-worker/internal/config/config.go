@@ -23,6 +23,9 @@ type Config struct {
 	SMTPUsername string
 	SMTPPassword string
 	SMTPFrom     string
+
+	// Telegram Notifications Config (optional)
+	TelegramBotToken string
 }
 
 // Load lee el entorno utilizando Viper y construye el objeto de configuración.
@@ -90,6 +93,8 @@ func Load() (*Config, error) {
 	if cfg.SMTPFrom == "" {
 		cfg.SMTPFrom = "alerts@monitoring.local"
 	}
+
+	cfg.TelegramBotToken = v.GetString("TELEGRAM_BOT_TOKEN")
 
 	return &cfg, nil
 }

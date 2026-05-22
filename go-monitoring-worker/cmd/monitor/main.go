@@ -61,7 +61,9 @@ func main() {
 	// Start 2 concurrent background workers
 	smtpDispatcher.Start(context.Background(), 2)
 
-	mailer := alerts.NewBatchNotifier(10*time.Second, smtpDispatcher)
+	telegramSender := notification.NewTelegramSender(cfg.TelegramBotToken)
+
+	mailer := alerts.NewBatchNotifier(10*time.Second, smtpDispatcher, telegramSender)
 
 	// 3. Ensamblar Lógica Core
 	alertEngine := alerts.NewEngine(mailer, influxWriter)

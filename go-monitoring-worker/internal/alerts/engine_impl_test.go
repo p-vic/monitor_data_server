@@ -19,6 +19,10 @@ func (m *mockNotifier) SendEmail(to string, subject string, body string) error {
 	return nil
 }
 
+func (m *mockNotifier) SendTelegram(chatID string, message string) error {
+	return nil
+}
+
 // Helper to simulate a ping result
 func makePing(isDown bool, latency float64, t time.Time) models.PingResult {
 	return models.PingResult{
@@ -41,6 +45,7 @@ func TestFSM_Ejemplo1(t *testing.T) {
 		AlertConfig:    `{"t": 120, "n": 5, "c": true, "r": 7}`,
 		MaxLatency:     100,
 		WarningLatency: 50,
+		AlertEmails:    []string{"test@test.com"},
 	}
 
 	baseTime := time.Now()
@@ -87,10 +92,12 @@ func TestFSM_Ejemplo2(t *testing.T) {
 	engine := NewEngine(notifier, nil)
 
 	target := models.TargetConfig{
-		ID:          "tgt-2",
-		Name:        "Test2",
-		AlertConfig: `{"t": 0, "n": 10, "c": true, "r": 3}`,
-		MaxLatency:  100,
+		ID:             "tgt-2",
+		Name:           "Test2",
+		AlertConfig:    `{"t": 0, "n": 10, "c": true, "r": 3}`,
+		MaxLatency:     100,
+		WarningLatency: 50,
+		AlertEmails:    []string{"test@test.com"},
 	}
 
 	baseTime := time.Now()
@@ -137,6 +144,7 @@ func TestFSM_Ejemplo3(t *testing.T) {
 		ID:          "tgt-3",
 		AlertConfig: `{"t": 120, "n": 5, "c": false, "r": 4}`,
 		MaxLatency:  100,
+		AlertEmails: []string{"test@test.com"},
 	}
 
 	baseTime := time.Now()
@@ -172,6 +180,7 @@ func TestFSM_Ejemplo4(t *testing.T) {
 		ID:          "tgt-4",
 		AlertConfig: `{"t": 0, "n": 10, "c": false, "r": 20}`,
 		MaxLatency:  100,
+		AlertEmails: []string{"test@test.com"},
 	}
 
 	baseTime := time.Now()
@@ -210,6 +219,7 @@ func TestFSM_IsDownToRecovery(t *testing.T) {
 		AlertConfig:    `{"t": 0, "n": 3, "c": true, "r": 2}`, // 3 fallos para CRITICAL, 2 para RECOVERY
 		MaxLatency:     100,
 		WarningLatency: 50,
+		AlertEmails:    []string{"test@test.com"},
 	}
 
 	baseTime := time.Now()

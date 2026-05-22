@@ -56,6 +56,7 @@ services:
       SMTP_USERNAME: "${SMTP_USERNAME}"
       SMTP_PASSWORD: "${SMTP_PASSWORD}"
       SMTP_FROM: "${SMTP_FROM}"
+      TELEGRAM_BOT_TOKEN: "${TELEGRAM_BOT_TOKEN:-}"
       TZ: "America/Phoenix"
     env_file:
       - .env-w2

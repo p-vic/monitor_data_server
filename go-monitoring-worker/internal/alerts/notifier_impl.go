@@ -10,20 +10,22 @@ import (
 	"github.com/monitoring-system/go-worker/internal/notification"
 )
 
-// Recordatorio: Este notifier debe abstraer el envío de emails con Muting Noise.
+// BatchNotifier batches email alerts and sends Telegram messages immediately.
 type BatchNotifier struct {
-	mu           sync.Mutex
-	alertQueue   map[string][]string // Key: subject/grouping, Value: list of messages
-	flushTimeout time.Duration
-	timer        *time.Timer
-	dispatcher   *notification.Dispatcher
+	mu             sync.Mutex
+	alertQueue     map[string][]string // Key: subject/grouping, Value: list of messages
+	flushTimeout   time.Duration
+	timer          *time.Timer
+	dispatcher     *notification.Dispatcher
+	telegramSender *notification.TelegramSender
 }
 
-func NewBatchNotifier(flushTimeout time.Duration, d *notification.Dispatcher) Notifier {
+func NewBatchNotifier(flushTimeout time.Duration, d *notification.Dispatcher, tg *notification.TelegramSender) Notifier {
 	return &BatchNotifier{
-		alertQueue:   make(map[string][]string),
-		flushTimeout: flushTimeout,
-		dispatcher:   d,
+		alertQueue:     make(map[string][]string),
+		flushTimeout:   flushTimeout,
+		dispatcher:     d,
+		telegramSender: tg,
 	}
 }
 
@@ -40,6 +42,13 @@ func (b *BatchNotifier) SendEmail(to string, subject, body string) error {
 		b.timer = time.AfterFunc(b.flushTimeout, b.flush)
 	}
 
+	return nil
+}
+
+func (b *BatchNotifier) SendTelegram(chatID string, message string) error {
+	if b.telegramSender != nil {
+		b.telegramSender.Send(chatID, message)
+	}
 	return nil
 }
 

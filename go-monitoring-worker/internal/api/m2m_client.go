@@ -36,9 +36,11 @@ type M2MTaskConfig struct {
 	Timeout        int         `json:"timeout"`        // Seconds
 	WarningLatency float64     `json:"warning_latency"`
 	MaxLatency     float64     `json:"max_latency"`
-	AlertEmails    []string    `json:"alert_emails"`
-	AlertConfig    interface{} `json:"alert_config"`
-	IsActive       bool        `json:"is_active"`
+	AlertEmails         []string    `json:"alert_emails"`
+	AlertConfig         interface{} `json:"alert_config"`
+	NotificationChannel string      `json:"notification_channel"`
+	TelegramChatID      string      `json:"telegram_chat_id"`
+	IsActive            bool        `json:"is_active"`
 }
 
 // ControlPlaneClient defines the interface for M2M communication.
@@ -123,18 +125,20 @@ func (c *M2MClient) FetchTargets(ctx context.Context) ([]models.TargetConfig, er
 		}
 
 		targets = append(targets, models.TargetConfig{
-			ID:             t.ID,
-			TenantID:       t.TenantID,
-			Name:           t.Name,
-			IPAddress:      t.IPAddress,
-			Group:          t.Group,
-			CheckInterval:  time.Duration(t.CheckInterval) * time.Second,
-			Timeout:        time.Duration(t.Timeout) * time.Second,
-			WarningLatency: t.WarningLatency,
-			MaxLatency:     t.MaxLatency,
-			AlertEmails:    t.AlertEmails,
-			AlertConfig:    alertConfigJSON,
-			IsActive:       t.IsActive,
+			ID:                  t.ID,
+			TenantID:            t.TenantID,
+			Name:                t.Name,
+			IPAddress:           t.IPAddress,
+			Group:               t.Group,
+			CheckInterval:       time.Duration(t.CheckInterval) * time.Second,
+			Timeout:             time.Duration(t.Timeout) * time.Second,
+			WarningLatency:      t.WarningLatency,
+			MaxLatency:          t.MaxLatency,
+			AlertEmails:         t.AlertEmails,
+			AlertConfig:         alertConfigJSON,
+			NotificationChannel: t.NotificationChannel,
+			TelegramChatID:      t.TelegramChatID,
+			IsActive:            t.IsActive,
 		})
 	}
 

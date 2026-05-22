@@ -1,6 +1,7 @@
 package alerts
 
-// Notifier abstrae el envío de emails o webhooks, y gestiona el Muting Noise
+// Notifier abstracts delivery of alert messages across channels.
 type Notifier interface {
 	SendEmail(to string, subject, body string) error
+	SendTelegram(chatID string, message string) error
 }
