@@ -61,7 +61,17 @@ tar -czf "$OUT_TAR" -C "/tmp" "influx_backup_${WORKER}_${DATE}_host"
 docker exec "$CONTAINER" rm -rf "$TMP_DIR"
 rm -rf "/tmp/influx_backup_${WORKER}_${DATE}_host"
 
-echo "[$(date)] Backup completado: $(du -sh "$OUT_TAR" | cut -f1)"
+BACKUP_SIZE=$(du -sh "$OUT_TAR" | cut -f1)
+echo "[$(date)] Backup completado: ${BACKUP_SIZE}"
+
+STATUS_FILE="/home/victor/backups/backup-status.json"
+python3 -c "
+import json, os, sys
+f, cat, key, ts, sz = sys.argv[1:]
+d = json.load(open(f)) if os.path.exists(f) else {}
+d.setdefault(cat, {})[key] = {'last_run': ts, 'size': sz, 'status': 'ok'}
+json.dump(d, open(f, 'w'), indent=2)
+" "$STATUS_FILE" "influxdb" "$WORKER" "$(date '+%Y-%m-%d %H:%M')" "$BACKUP_SIZE" || true
 
 # Rotar — eliminar backups con más de KEEP_WEEKS semanas
 find "$BACKUP_DIR" -name "${WORKER}_*.tar.gz" -mtime +$((KEEP_WEEKS * 7)) -delete
