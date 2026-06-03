@@ -96,13 +96,28 @@ func (e *NetworkExecutor) executeICMP(ctx context.Context, target string, timeou
 	if h, _, err := net.SplitHostPort(target); err == nil {
 		host = h
 	}
-	dst, err := net.ResolveIPAddr("ip4", host)
-	if err != nil {
+	addrs, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if err != nil || len(addrs) == 0 {
 		return Result{
 			Target:   target,
 			Protocol: ProtocolICMP,
 			IsUp:     false,
 			ErrorMsg: "dns resolution failed",
+		}
+	}
+	var dst *net.IPAddr
+	for _, addr := range addrs {
+		if addr.IP.To4() != nil {
+			dst = &addr
+			break
+		}
+	}
+	if dst == nil {
+		return Result{
+			Target:   target,
+			Protocol: ProtocolICMP,
+			IsUp:     false,
+			ErrorMsg: "no ipv4 address found",
 		}
 	}
 

@@ -140,6 +140,10 @@ func main() {
 	log.Println("Shutdown OS signal received. Graceful termination in progress...")
 	cancel() // Aborta PULL loops y Pings en curso
 
+	// Stop SMTP Dispatcher gracefully to send pending emails
+	log.Println("Stopping SMTP dispatcher queue...")
+	smtpDispatcher.Stop()
+
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutdownCancel()
 	server.Shutdown(shutdownCtx)

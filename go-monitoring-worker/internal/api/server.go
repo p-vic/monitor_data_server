@@ -31,6 +31,16 @@ func NewServer(m scheduler.Manager, reloadCh chan struct{}, internalSecret, infl
 	}
 }
 
+func (s *Server) authWrapper(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Internal-Secret") != s.internalSecret {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // Router returns the configured ServeMux
 func (s *Server) Router() *http.ServeMux {
 	mux := http.NewServeMux()
@@ -42,7 +52,7 @@ func (s *Server) Router() *http.ServeMux {
 	profiler := NewProfiler()
 	// Rate 1: Bloqueos y Contención reportados al 100% (Ajustar en producción masiva si requiere)
 	profiler.EnableAdvancedProfiling(1, 1)
-	profiler.RegisterRoutes(mux)
+	profiler.RegisterRoutes(mux, s.authWrapper)
 
 	return mux
 }
