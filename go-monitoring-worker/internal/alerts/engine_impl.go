@@ -13,10 +13,11 @@ import (
 )
 
 type AlertConfigParsed struct {
-	T int  `json:"t"` // Time window in seconds
-	N int  `json:"n"` // Number of alerts
-	C bool `json:"c"` // Consecutive?
-	R int  `json:"r"` // Recovery consecutive pings needed
+	T  int  `json:"t"`  // Time window in seconds
+	N  int  `json:"n"`  // Number of alerts
+	C  bool `json:"c"`  // Consecutive?
+	R  int  `json:"r"`  // Recovery consecutive pings needed
+	RI int  `json:"ri"` // Reminder interval in minutes (0 = disabled)
 }
 
 type targetState struct {
@@ -27,6 +28,7 @@ type targetState struct {
 	consecutiveSuccess int
 	currentStreak      int
 	maxStreakInWin     int
+	lastReminderTime   time.Time
 }
 
 type fsmEngine struct {
@@ -130,6 +132,7 @@ func (e *fsmEngine) handleCritical(state *targetState, target models.TargetConfi
 
 	if shouldAlarm && !state.isAlarmed {
 		state.isAlarmed = true
+		state.lastReminderTime = result.Timestamp
 
 		// This generates a duplicate visual log but signals the threshold breach
 		e.fireEvent(target, result, "CRITICAL", "Threshold breached")
@@ -173,6 +176,47 @@ Please check the Telemetry Dashboard for visual correlation.`,
 			if (channel == "telegram" || channel == "both") && target.TelegramChatID != "" {
 				tgMsg := fmt.Sprintf("🚨 CRITICAL ALERT: %s\nHost: %s\nStatus: %s\nMax Latency: %.0f ms\nWindow: %ds / %d faults",
 					target.Name, target.IPAddress, latencyStr, target.MaxLatency, cfg.T, cfg.N)
+				_ = e.notifier.SendTelegram(target.TelegramChatID, tgMsg)
+			}
+		}
+	}
+
+	// Reminder notification while still in CRITICAL state
+	if state.isAlarmed && cfg.RI > 0 && e.notifier != nil {
+		reminderInterval := time.Duration(cfg.RI) * time.Minute
+		if result.Timestamp.Sub(state.lastReminderTime) >= reminderInterval {
+			state.lastReminderTime = result.Timestamp
+
+			var latencyStr string
+			if result.IsDown {
+				latencyStr = "DOWN (Timeout/Unreachable)"
+			} else {
+				latencyStr = fmt.Sprintf("%.2f ms", result.LatencyMs)
+			}
+
+			channel := target.NotificationChannel
+			if channel == "" {
+				channel = "email"
+			}
+
+			if (channel == "email" || channel == "both") && len(target.AlertEmails) > 0 {
+				body := fmt.Sprintf(`Reminder: %s (%s) is still DOWN.
+
+=== Current Status ===
+- Status: %s
+- Max Latency Allowed: %.2f ms
+
+This is an automated reminder. You will keep receiving these every %d minute(s) until the service recovers.`,
+					target.Name, target.IPAddress, latencyStr, target.MaxLatency, cfg.RI)
+
+				for _, email := range target.AlertEmails {
+					_ = e.notifier.SendEmail(email, "REMINDER - Still DOWN: "+target.Name, body)
+				}
+			}
+
+			if (channel == "telegram" || channel == "both") && target.TelegramChatID != "" {
+				tgMsg := fmt.Sprintf("🔔 REMINDER - Still DOWN: %s\nHost: %s\nStatus: %s\nEvery %d min until recovery.",
+					target.Name, target.IPAddress, latencyStr, cfg.RI)
 				_ = e.notifier.SendTelegram(target.TelegramChatID, tgMsg)
 			}
 		}
