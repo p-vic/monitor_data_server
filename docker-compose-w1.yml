@@ -9,7 +9,7 @@ services:
     container_name: ips_influxdb_w1
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8085:8086"
+      - "8085:8086"
     volumes:
       - influxdb1_data:/var/lib/influxdb2
       - influxdb1_config:/etc/influxdb2

@@ -9,8 +9,7 @@ services:
     container_name: ips_influxdb_w3
     restart: unless-stopped
     ports:
-      # Expose InfluxDB via port 8087 on the host (localhost only — not public)
-      - "127.0.0.1:8087:8086"
+      - "8087:8086"
     volumes:
       - influxdb3_data:/var/lib/influxdb3
       - influxdb3_config:/etc/influxdb3
@@ -43,8 +42,7 @@ services:
       influxdb:
         condition: service_healthy
     ports:
-      # Expose worker API via port 8083 on the host (localhost only — not public)
-      - "127.0.0.1:8083:8081"
+      - "8083:8081"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
