@@ -96,6 +96,7 @@ func main() {
 
 		doSync := func(reason string) {
 			if targets, err := m2mClient.FetchTargets(ctx); err == nil {
+				alertEngine.UpdateTargets(targets)
 				manager.SyncConfiguration(targets)
 				log.Printf("Sync OK [%s]: %d targets loaded", reason, len(targets))
 			} else {

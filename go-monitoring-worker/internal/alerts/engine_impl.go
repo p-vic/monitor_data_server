@@ -32,8 +32,9 @@ type targetState struct {
 }
 
 type fsmEngine struct {
-	states       map[string]*targetState
-	mu           sync.RWMutex
+	states    map[string]*targetState
+	parentMap map[string]string // targetID → parentID ("" = root)
+	mu        sync.RWMutex
 	notifier     Notifier
 	influxWriter influx.Writer
 }
@@ -41,9 +42,40 @@ type fsmEngine struct {
 func NewEngine(n Notifier, w influx.Writer) Engine {
 	return &fsmEngine{
 		states:       make(map[string]*targetState),
+		parentMap:    make(map[string]string),
 		notifier:     n,
 		influxWriter: w,
 	}
+}
+
+// UpdateTargets refreshes the topology map used for ancestor-based alarm suppression.
+// Called on every sync so the engine always has the current parent_id relationships.
+func (e *fsmEngine) UpdateTargets(targets []models.TargetConfig) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	pm := make(map[string]string, len(targets))
+	for _, t := range targets {
+		pm[t.ID] = t.ParentID
+	}
+	e.parentMap = pm
+}
+
+// isAncestorAlarmed walks up the parent chain and returns true if any ancestor
+// is currently in alarmed (CRITICAL) state. Must be called with e.mu held.
+func (e *fsmEngine) isAncestorAlarmed(targetID string) bool {
+	visited := make(map[string]bool)
+	current := e.parentMap[targetID]
+	for current != "" {
+		if visited[current] {
+			break // cycle guard
+		}
+		visited[current] = true
+		if s, ok := e.states[current]; ok && s.isAlarmed {
+			return true
+		}
+		current = e.parentMap[current]
+	}
+	return false
 }
 
 func (e *fsmEngine) ProcessResult(target models.TargetConfig, result models.PingResult) {
@@ -137,7 +169,14 @@ func (e *fsmEngine) handleCritical(state *targetState, target models.TargetConfi
 		// This generates a duplicate visual log but signals the threshold breach
 		e.fireEvent(target, result, "CRITICAL", "Threshold breached")
 
-		if e.notifier != nil {
+		// Alarm suppression: if an ancestor is already CRITICAL, this node's failure
+		// is a consequence of the upstream outage — notify only the root cause.
+		ancestorDown := e.isAncestorAlarmed(target.ID)
+		if ancestorDown {
+			log.Printf("Suppressed CRITICAL alert for %s (%s): ancestor is already alarmed", target.Name, target.IPAddress)
+		}
+
+		if e.notifier != nil && !ancestorDown {
 			var latencyStr string
 			if result.IsDown {
 				latencyStr = "DOWN (Timeout/Unreachable)"
@@ -181,8 +220,8 @@ Please check the Telemetry Dashboard for visual correlation.`,
 		}
 	}
 
-	// Reminder notification while still in CRITICAL state
-	if state.isAlarmed && cfg.RI > 0 && e.notifier != nil {
+	// Reminder notification while still in CRITICAL state (also suppressed if ancestor is alarmed)
+	if state.isAlarmed && cfg.RI > 0 && e.notifier != nil && !e.isAncestorAlarmed(target.ID) {
 		reminderInterval := time.Duration(cfg.RI) * time.Minute
 		if result.Timestamp.Sub(state.lastReminderTime) >= reminderInterval {
 			state.lastReminderTime = result.Timestamp

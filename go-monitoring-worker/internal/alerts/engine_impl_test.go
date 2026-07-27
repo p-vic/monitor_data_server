@@ -208,6 +208,61 @@ func TestFSM_Ejemplo4(t *testing.T) {
 	}
 }
 
+// Alarm suppression: child alert is suppressed when parent is already CRITICAL.
+// Parent fires normally; child enters alarmed state but sends no notification.
+// When parent recovers, a subsequent child failure sends its own alert.
+func TestFSM_AlarmSuppression(t *testing.T) {
+	notifier := &mockNotifier{}
+	engine := NewEngine(notifier, nil)
+
+	parent := models.TargetConfig{
+		ID:             "parent-1",
+		Name:           "Tower",
+		AlertConfig:    `{"t": 0, "n": 1, "c": true, "r": 1}`,
+		MaxLatency:     100,
+		WarningLatency: 50,
+		AlertEmails:    []string{"ops@test.com"},
+	}
+	child := models.TargetConfig{
+		ID:             "child-1",
+		Name:           "Router under Tower",
+		ParentID:       "parent-1",
+		AlertConfig:    `{"t": 0, "n": 1, "c": true, "r": 1}`,
+		MaxLatency:     100,
+		WarningLatency: 50,
+		AlertEmails:    []string{"ops@test.com"},
+	}
+
+	engine.UpdateTargets([]models.TargetConfig{parent, child})
+
+	baseTime := time.Now()
+
+	// 1. Parent goes CRITICAL → must fire notification
+	engine.ProcessResult(parent, makePing(true, 0, baseTime))
+	if notifier.sentEmails != 1 {
+		t.Fatalf("Expected 1 email for parent CRITICAL, got %d", notifier.sentEmails)
+	}
+
+	// 2. Child goes CRITICAL while parent is still CRITICAL → must be suppressed
+	engine.ProcessResult(child, makePing(true, 0, baseTime.Add(5*time.Second)))
+	if notifier.sentEmails != 1 {
+		t.Fatalf("Expected child CRITICAL to be suppressed (still 1 email), got %d", notifier.sentEmails)
+	}
+
+	// 3. Parent recovers
+	engine.ProcessResult(parent, makePing(false, 10, baseTime.Add(10*time.Second)))
+	if notifier.sentEmails != 2 {
+		t.Fatalf("Expected recovery email for parent, got %d", notifier.sentEmails)
+	}
+
+	// 4. Child is still down — reset child state and trigger again (simulates next sync cycle)
+	engine.ResetTarget("child-1")
+	engine.ProcessResult(child, makePing(true, 0, baseTime.Add(15*time.Second)))
+	if notifier.sentEmails != 3 {
+		t.Fatalf("Expected child CRITICAL alert now that parent recovered, got %d", notifier.sentEmails)
+	}
+}
+
 // Validación explícita de Caída (IsDown) y Recuperación por Latencia
 func TestFSM_IsDownToRecovery(t *testing.T) {
 	notifier := &mockNotifier{}

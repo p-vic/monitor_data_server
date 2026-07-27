@@ -8,4 +8,7 @@ import (
 type Engine interface {
 	ProcessResult(target models.TargetConfig, result models.PingResult)
 	ResetTarget(targetID string)
+	// UpdateTargets keeps the engine aware of the full topology so it can
+	// suppress child alerts when an ancestor is already CRITICAL.
+	UpdateTargets(targets []models.TargetConfig)
 }

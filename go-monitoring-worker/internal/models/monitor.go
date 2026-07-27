@@ -18,6 +18,7 @@ type TargetConfig struct {
 	Name           string
 	IPAddress      string
 	Group          string
+	ParentID       string // empty = root node; set = child node for alarm suppression
 	CheckInterval  time.Duration
 	Timeout        time.Duration
 	WarningLatency float64

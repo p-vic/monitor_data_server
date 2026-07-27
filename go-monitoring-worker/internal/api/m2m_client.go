@@ -32,6 +32,7 @@ type M2MTaskConfig struct {
 	Name           string      `json:"name"`
 	IPAddress      string      `json:"ip_address"`
 	Group          string      `json:"group"`
+	ParentID       *string     `json:"parent_id"` // nullable UUID from control plane
 	CheckInterval  int         `json:"check_interval"` // Seconds
 	Timeout        int         `json:"timeout"`        // Seconds
 	WarningLatency float64     `json:"warning_latency"`
@@ -124,12 +125,18 @@ func (c *M2MClient) FetchTargets(ctx context.Context) ([]models.TargetConfig, er
 			alertConfigJSON = string(bytes)
 		}
 
+		parentID := ""
+		if t.ParentID != nil {
+			parentID = *t.ParentID
+		}
+
 		targets = append(targets, models.TargetConfig{
 			ID:                  t.ID,
 			TenantID:            t.TenantID,
 			Name:                t.Name,
 			IPAddress:           t.IPAddress,
 			Group:               t.Group,
+			ParentID:            parentID,
 			CheckInterval:       time.Duration(t.CheckInterval) * time.Second,
 			Timeout:             time.Duration(t.Timeout) * time.Second,
 			WarningLatency:      t.WarningLatency,
