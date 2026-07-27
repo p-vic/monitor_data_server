@@ -91,7 +91,7 @@ func main() {
 	// Arquitectura PULL con Push-Signal: el ticker de 5min es el fallback de seguridad.
 	// Los cambios en tiempo real se propagan vía señal push desde FastAPI → /internal/reload.
 	go func() {
-		ticker := time.NewTicker(5 * time.Minute)
+		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()
 
 		doSync := func(reason string) {
