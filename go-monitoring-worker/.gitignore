@@ -1,0 +1,4 @@
+# compiled binaries
+/agent
+/monitor
+*.exe
