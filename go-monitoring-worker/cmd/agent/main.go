@@ -25,6 +25,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"runtime"
@@ -112,6 +113,8 @@ func main() {
 		cmdRegister(os.Args[2:])
 	case "run":
 		cmdRun()
+	case "service":
+		cmdService(os.Args[2:])
 	case "version":
 		fmt.Printf("ipmonitor-agent %s %s/%s\n", agentVersion, runtime.GOOS, runtime.GOARCH)
 	default:
@@ -127,6 +130,7 @@ func printUsage() {
 Subcommands:
   register  --token <TOKEN> --url <CP_URL>   Register with the Control Plane
   run                                         Start monitoring (uses saved credentials)
+  service   install|uninstall|start|stop      Manage the system service (requires root)
   version                                     Print version and exit`)
 }
 
@@ -485,6 +489,102 @@ func (p *agentPool) worker(ctx context.Context) {
 
 			p.rep.Add(result)
 		}
+	}
+}
+
+// ─── service ─────────────────────────────────────────────────────────────────
+
+const systemdUnitPath = "/etc/systemd/system/ipmonitor-agent.service"
+
+func cmdService(args []string) {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "service: expected install|uninstall|start|stop")
+		os.Exit(1)
+	}
+	switch args[0] {
+	case "install":
+		cmdServiceInstall()
+	case "uninstall":
+		cmdServiceUninstall()
+	case "start":
+		runSystemctl("start", "ipmonitor-agent")
+	case "stop":
+		runSystemctl("stop", "ipmonitor-agent")
+	default:
+		fmt.Fprintf(os.Stderr, "service: unknown action %q — expected install|uninstall|start|stop\n", args[0])
+		os.Exit(1)
+	}
+}
+
+func cmdServiceInstall() {
+	if runtime.GOOS == "windows" {
+		log.Fatal("service install: Windows Service support is not yet available — use NSSM or Task Scheduler manually")
+	}
+
+	binaryPath, err := os.Executable()
+	if err != nil {
+		log.Fatalf("service install: cannot determine binary path: %v", err)
+	}
+	binaryPath, err = filepath.EvalSymlinks(binaryPath)
+	if err != nil {
+		log.Fatalf("service install: cannot resolve binary path: %v", err)
+	}
+
+	unit := fmt.Sprintf(`[Unit]
+Description=IPMonitor Agent
+Documentation=https://ipmonitor.yaurima.com
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=%s run
+EnvironmentFile=-/etc/ipmonitor-agent/env
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ipmonitor-agent
+
+[Install]
+WantedBy=multi-user.target
+`, binaryPath)
+
+	if err := os.WriteFile(systemdUnitPath, []byte(unit), 0644); err != nil {
+		log.Fatalf("service install: write %s: %v (try sudo)", systemdUnitPath, err)
+	}
+	fmt.Printf("Wrote %s\n", systemdUnitPath)
+
+	runSystemctl("daemon-reload")
+	runSystemctl("enable", "ipmonitor-agent")
+
+	fmt.Println("Service installed and enabled.")
+	fmt.Println("Start with: ipmonitor-agent service start")
+}
+
+func cmdServiceUninstall() {
+	if runtime.GOOS == "windows" {
+		log.Fatal("service uninstall: Windows Service support is not yet available")
+	}
+
+	runSystemctl("disable", "--now", "ipmonitor-agent")
+
+	if err := os.Remove(systemdUnitPath); err != nil && !os.IsNotExist(err) {
+		log.Printf("WARN: could not remove %s: %v", systemdUnitPath, err)
+	} else {
+		fmt.Printf("Removed %s\n", systemdUnitPath)
+	}
+
+	runSystemctl("daemon-reload")
+	fmt.Println("Service uninstalled.")
+}
+
+func runSystemctl(args ...string) {
+	cmd := exec.Command("systemctl", args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		log.Fatalf("systemctl %v: %v", args, err)
 	}
 }
 
