@@ -1,0 +1,23 @@
+# Reaplica las reglas DOCKER-USER de ipmonitor en cada arranque o reinicio de Docker.
+# Instalación:
+#   sudo install -m 755 firewall-ports.sh /usr/local/sbin/ipmonitor-firewall-ports.sh
+#   sudo cp ipmonitor-firewall.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now ipmonitor-firewall
+#
+# No usar `systemctl restart iptables` (iptables-services): vacía también las
+# cadenas de Docker y deja sin red a todos los contenedores del VPS.
+
+[Unit]
+Description=ipmonitor: bloquear acceso público a puertos de workers (DOCKER-USER)
+After=docker.service
+Requires=docker.service
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/ipmonitor-firewall-ports.sh apply
+ExecStop=/usr/local/sbin/ipmonitor-firewall-ports.sh remove
+
+[Install]
+WantedBy=multi-user.target docker.service
