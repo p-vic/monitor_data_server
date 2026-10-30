@@ -30,6 +30,9 @@ type Result struct {
 	ErrorMsg string
 }
 
+// defaultTimeout applies when a target has no timeout configured.
+const defaultTimeout = 5 * time.Second
+
 // Executor defines the clean architecture port for network checks.
 type Executor interface {
 	Execute(ctx context.Context, target string, protocol Protocol, timeout time.Duration) Result
@@ -46,7 +49,7 @@ func NewNetworkExecutor() *NetworkExecutor {
 // Execute performs the network check, wrapping it safely in isolated context timeouts.
 func (e *NetworkExecutor) Execute(ctx context.Context, target string, protocol Protocol, timeout time.Duration) Result {
 	if timeout <= 0 {
-		timeout = 5 * time.Second
+		timeout = defaultTimeout
 	}
 
 	opCtx, cancel := context.WithTimeout(ctx, timeout)
